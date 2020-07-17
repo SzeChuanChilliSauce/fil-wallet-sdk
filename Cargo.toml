@@ -1,0 +1,31 @@
+[package]
+name = "fwsdk"
+version = "0.1.0"
+authors = [""]
+edition = "2018"
+
+[lib] 
+crate-type=["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+bls-signatures = "0.6.0"
+byteorder = "1.2"
+drop_struct_macro_derive = "0.4.0"
+fff = "0.2"
+ffi-toolkit = "0.4.0"
+log = "0.4.7"
+paired = "0.20.0"
+fil_logger = "0.1.0"
+rand = "0.7"
+rand_chacha = "0.2.1"
+rayon = "1.2.1"
+anyhow = "1.0.23"
+serde_json = "1.0.46"
+libc = "0.2.71"
+tiny-bip39 = "0.7.3"
+sha2 = "0.8.2"
+blake2b_simd = "0.5.10"
+base64 = "0.12.1"
+num-bigint = "0.3.0"
+lazy_static = "1.4.0"
+data-encoding = "2.2.1"
