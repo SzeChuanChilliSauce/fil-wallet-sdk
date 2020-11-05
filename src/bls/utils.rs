@@ -211,8 +211,6 @@ fn multi_hash_sum(data: &mut Vec<u8>, typ: &u64, mut length: i32) -> Vec<u8> {
     }
 
     // 计算摘要
-    // 摘要算法：blake2b
-    // 输出长度：32字节
     let mhash = Params::new()
         .hash_length(length as usize)
         .to_state()
@@ -372,206 +370,14 @@ pub fn fil_base32_encode(data: &[u8]) -> Vec<u8> {
     let data = encoded.into_bytes();
 
     let mut res: Vec<u8> = Vec::new();
-    let l = data.len();
 
-    for i in  0..l {
+    for i in  0..data.len() {
         if data[i] >= 48 && data[i] <= 57 {
             res.push(data[i]);
-        }else{
+        } else {
             res.push(data[i]+32);
         }
     }
 
     res
-
-    /*
-    let length = data.len();
-    let mut extra = 0;
-    // 求余
-    match length%5 {
-        4 => {
-            extra = (4*8)/5+1;
-        }
-        3 => {
-            extra = (3*8)/5+1;
-        }
-        2 => {
-            extra = (2*8)/5+1;
-        }
-        1 => {
-            extra = 8/5+1;
-        }
-        _ => {}
-    };
-
-    // 计算输出的长度
-    let out_len = length/5*8+extra;
-    let mut encoded_data:Vec<u8> = vec![0; out_len];
-
-    let mut first_byte: u64 = 0;
-    let mut second_byte: u64 = 0;
-    let mut third_byte: u64 = 0;
-    let mut fourth_byte: u64 = 0;
-    let mut fifth_byte: u64 = 0;
-
-    let mut i: usize = 0;
-    let mut j: usize = 0;
-
-    while i+5 < length {
-        let mut num:u64 = 0;
-
-        if i < length {
-            first_byte = data[i] as u64;
-        } else {
-            first_byte = 0 ;
-        }
-
-        if i < length {
-            second_byte = data[i+1] as u64;
-        } else {
-            second_byte = 0;
-        }
-
-        if i < length {
-            third_byte = data[i+2] as u64;
-        } else {
-            third_byte = 0;
-        }
-
-        if i < length {
-            fourth_byte = data[i+3] as u64;
-        } else {
-            fourth_byte = 0;
-        }
-
-        if i < length {
-            fifth_byte = data[i+4] as u64;
-        } else {
-            fifth_byte = 0;
-        }
-
-        num = ((first_byte >> 3) << 35) +
-            ((((first_byte  & 0x07) << 2) | (second_byte >> 6)) << 30 ) +
-            (((second_byte  & 0x3f) >> 1) << 25) +
-            ((((second_byte & 0x01) << 4) | (third_byte  >> 4)) << 20) +
-            ((((third_byte  & 0x0f) << 1) | (fourth_byte >> 7)) << 15) +
-            (((fourth_byte  & 0x7f) >> 2) << 10) +
-            ((((fourth_byte & 0x3)  << 3) | (fifth_byte  >> 5)) << 5) +
-            (fifth_byte     & 0x1f);
-
-
-        encoded_data[j] = BAS32_ALPHABET[((num >> 35) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 30) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 25) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 20) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 15) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 10) & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[((num >> 5)  & 0x1f) as usize];
-        j+=1;
-        encoded_data[j] = BAS32_ALPHABET[(num & 0x1f) as usize];
-        j+=1;
-
-        i += 5;
-    }
-
-
-    first_byte = 0;
-    second_byte = 0;
-    third_byte = 0;
-    fourth_byte = 0;
-    fifth_byte = 0;
-
-    let mut num: u64 = 0;
-    match length%5 {
-        4 => {
-            first_byte  = data[length-4] as u64;
-            second_byte = data[length-3] as u64;
-            third_byte  = data[length-2] as u64;
-            fourth_byte = data[length-1] as u64;
-
-            num = ((first_byte >> 3) << 30) +
-                ((((first_byte  & 0x07) << 2) | (second_byte >> 6)) << 25) +
-                (((second_byte  & 0x3f) >> 1) << 20) +
-                ((((second_byte & 0x01) << 4) | (third_byte >> 4)) << 15) +
-                ((((third_byte  & 0x0f) << 1) | (fourth_byte >> 7)) << 10) +
-                (((fourth_byte  & 0x7f) >> 2) << 5) +
-                ((fourth_byte   & 0x03) << 3);
-
-            encoded_data[j] = BAS32_ALPHABET[((num >> 30) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 25) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 20) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 15) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 10) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 5)  & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[(num & 0x1f) as usize];
-        }
-
-        3 => {
-            first_byte  = data[length-3] as u64;
-            second_byte = data[length-2] as u64;
-            third_byte  = data[length-1] as u64;
-
-
-            num = ((first_byte >> 3) << 20) +
-                ((((first_byte  & 0x07) << 2) | (second_byte >> 6)) << 15) +
-                (((second_byte  & 0x3f) >> 1) << 10) +
-                ((((second_byte & 0x01) << 4) | (third_byte >> 4)) << 5) +
-                ((third_byte    & 0x0f) << 1);
-
-            encoded_data[j] = BAS32_ALPHABET[((num >> 20) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 15) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 10) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 5)  & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[(num & 0x1f) as usize];
-        }
-
-        2 => {
-            first_byte  = data[length-2] as u64;
-            second_byte = data[length-1] as u64;
-
-            num = ((first_byte >> 3) << 15) +
-                ((((first_byte & 0x07) << 2) | (second_byte >> 6)) << 10) +
-                (((second_byte & 0x3f) >> 1) << 5) +
-                (second_byte   & 0x01);
-
-            encoded_data[j] = BAS32_ALPHABET[((num >> 15) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 10) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[((num >> 5)  & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[(num & 0x1f) as usize];
-        }
-
-        1 => {
-            first_byte = data[length-1] as u64;
-
-            num = ((first_byte >> 3) << 5) +  ((first_byte & 0x07) << 2);
-
-            encoded_data[j] = BAS32_ALPHABET[((num >> 5) & 0x1f) as usize];
-            j += 1;
-            encoded_data[j] = BAS32_ALPHABET[(num & 0x1f) as usize];
-        }
-
-        _ => {}
-    }
-
-    encoded_data
-     */
 }

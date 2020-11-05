@@ -1,11 +1,11 @@
 [package]
-name = "fwsdk"
+name = "mtcrypto"
 version = "0.1.0"
-authors = [""]
+authors = ["chensiqi <chensiqi_scdy@163.com>"]
 edition = "2018"
 
 [lib] 
-crate-type=["rlib", "staticlib", "cdylib"]
+crate-type=["rlib", "staticlib"]
 
 [dependencies]
 bls-signatures = "0.6.0"
@@ -29,3 +29,4 @@ base64 = "0.12.1"
 num-bigint = "0.3.0"
 lazy_static = "1.4.0"
 data-encoding = "2.2.1"
+parity-secp256k1 = "0.7.0"

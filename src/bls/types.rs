@@ -107,7 +107,8 @@ pub unsafe extern "C" fn fil_destroy_export_result(ptr: *mut fil_ExportResult) {
 #[no_mangle]
 pub struct fil_SignedMessageResult {
     pub cid: [u8;62],
-    pub sig: [u8;96],
+    pub secp_sig: [u8;65],
+    pub bls_sig: [u8;96],
 }
 
 #[no_mangle]

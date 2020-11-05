@@ -6,6 +6,13 @@ use crate::bls::utils::{V1Builder, DAG_CBOR, BLAKE2B_256, DEFAULT_LENGTH, fil_ba
 use crate::bls::{utils, types};
 use bls_signatures::{PrivateKey, Serialize};
 use std::borrow::Borrow;
+use secp256k1::{Secp256k1,ContextFlag, Message};
+use secp256k1::key::{SecretKey as SecpPrivateKey, PublicKey as SecPublicKey};
+use blake2b_simd::{Params};
+
+
+const SECP_SIGNATURE_BYTES: usize = 64;
+const SECP_HASH_BYTES: usize = 32;
 
 /// major types
 const MAJ_UNSIGNED_INT: u8 = 0;
@@ -17,7 +24,7 @@ const MAJ_MAP:          u8 = 5;
 const MAJ_TAG:          u8 = 6;
 const MAJ_OTHER:        u8 = 7;
 
-const LENGTH_BUF_MESSAGE: u8 = 137;
+const LENGTH_BUF_MESSAGE: u8 = 138;
 
 /// filecoin交易（消息）
 pub struct FilMessage {
@@ -26,7 +33,8 @@ pub struct FilMessage {
     pub from: String,
     pub nonce: u64,
     pub value: BigInt,
-    pub gas_price: BigInt,
+    pub gas_fee_cap: BigInt,
+    pub gas_premium: BigInt,
     pub gas_limit: i64,
     pub method: u64,
     pub params: Vec<u8>,
@@ -62,39 +70,40 @@ impl FilMessage {
         } else {
             write_major_type_header_buf(scratch.as_mut(), buf, MAJ_NEGATIVE_INT, (-self.version-1) as u64);
         }
-        //println!("aftern version {:?}", buf);
+
         // address
         marshal_cbor_address(buf, self.to.as_ref());
-        //println!("aftern to {:?}", buf);
         marshal_cbor_address(buf, self.from.as_ref());
-        //println!("aftern from {:?}", buf);
+
         // nonce
         write_major_type_header_buf(scratch.as_mut(), buf, MAJ_UNSIGNED_INT, self.nonce);
-        //println!("aftern nonce {:?}", buf);
+
         // value
         marshal_cbor_bigint(buf, &self.value);
-        //println!("aftern value {:?}", buf);
-        // gas price
-        marshal_cbor_bigint(buf, &self.gas_price);
-        //println!("aftern price {:?}", buf);
+
         // gas limit
         if self.gas_limit >= 0 {
             write_major_type_header_buf(scratch.as_mut(), buf, MAJ_UNSIGNED_INT, self.gas_limit as u64);
         } else {
             write_major_type_header_buf(scratch.as_mut(), buf, MAJ_NEGATIVE_INT, (-self.gas_limit-1) as u64)
         }
-        //println!("aftern limit {:?}", buf);
+
+        // GasFeeCap
+        marshal_cbor_bigint(buf, &self.gas_fee_cap);
+
+        // GasPremium
+        marshal_cbor_bigint(buf, &self.gas_premium);
+
         // method
         write_major_type_header_buf(scratch.as_mut(), buf, MAJ_UNSIGNED_INT, self.method);
-        //println!("aftern method {:?}", buf);
+
         // params len
         write_major_type_header_buf(scratch.as_mut(), buf, MAJ_BYTE_STRING, self.params.len() as u64);
-        //println!("aftern params len {:?}", buf);
+
         // params
         for i in 0..self.params.len() {
             buf.push(self.params[i]);
         }
-        //println!("aftern params {:?}", buf);
     }
 
 }
@@ -102,6 +111,7 @@ impl FilMessage {
 /// 功  能: 签名交易
 ///
 /// 参  数:
+///     typ             - 私钥类型
 ///     raw_private_key - 私钥
 ///     version         - 交易版本号
 ///     nonce           - 交易序号
@@ -112,15 +122,17 @@ impl FilMessage {
 ///     from_len        - 付款人地址长度
 ///     value           - 金额
 ///     value           - 金额长度
-///     gas_price       - 油价
-///     gas_price_len   - 油价长度
-///     gas_limit       - 油上限
+///     gas_premium     - 油价
+///     gas_premium_len - 油价字长度
+///     gas_fee_cap     - 油价上限
+///     gas_fee_cap_len - 油价上限长度
+///     gas_limit       - 油量上限
 ///     params          - 交易携带数据
 ///     params_len      - 交易携带数据长度
 /// 返回值: 交易的签名
 ///
 #[no_mangle]
-pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
+pub unsafe extern "C" fn sign_transaction_message(typ: u8, raw_private_key: *const u8,
                                                   version: i64,
                                                   nonce: u64,
                                                   method: u64,
@@ -130,39 +142,41 @@ pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
                                                   from_len: usize,
                                                   value: *const u8,
                                                   value_len: usize,
-                                                  gas_price:*const u8,
-                                                  gas_price_len: usize,
+                                                  gas_premium: *const u8,
+                                                  gas_premium_len: usize,
+                                                  gas_fee_cap: *const u8,
+                                                  gas_fee_cap_len: usize,
                                                   gas_limit: i64,
                                                   params: *const u8,
                                                   params_len: usize) ->*mut types::fil_SignedMessageResult {
     // 获取私钥
     let private_key_slice = from_raw_parts(raw_private_key, PRIVATE_KEY_BYTES);
-    let private_key = try_ffi!(
-        PrivateKey::from_bytes(private_key_slice),
-        std::ptr::null_mut()
-    );
 
-    // 地址
-    // to
+    // To
     let to_addr_bytes = from_raw_parts(to, to_len);
     let to_str = String::from_utf8(to_addr_bytes.to_vec()).unwrap();
 
-    // from
+    // From
     let from_addr_bytes = from_raw_parts(from, from_len);
     let from_str = String::from_utf8(from_addr_bytes.to_vec()).unwrap();
 
-    // value
+    // Value
     let value_bytes = from_raw_parts(value, value_len);
 
-    // gas price
-    let gas_price_bytes = from_raw_parts(gas_price, gas_price_len);
+    // GasFeeCap
+    let gas_fee_cap_bytes = from_raw_parts(gas_fee_cap, gas_fee_cap_len);
 
+    // GasPremium
+    let gas_premium_bytes = from_raw_parts(gas_premium, gas_premium_len);
+
+    // Params
     let mut params_bytes = vec![];
     if params != std::ptr::null() {
         let bytes = from_raw_parts(params, params_len);
         params_bytes = Vec::from(bytes);
     }
 
+    // 将value转为BigInt
     let mut big_val = BigInt::default();
     let op_val = BigInt::parse_bytes(value_bytes, 10);
     if let Some(val) = op_val {
@@ -171,12 +185,22 @@ pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
         return  std::ptr::null_mut();
     }
 
-    let mut big_gas_price = BigInt::default();
-    let op_gas_price = BigInt::parse_bytes(gas_price_bytes, 10);
-    if let Some(gas_price) = op_gas_price {
-        big_gas_price = gas_price;
+    // 将GasFeeCap转为BigInt
+    let mut big_gas_fee_cap = BigInt::default();
+    let op_gas_fee_cap = BigInt::parse_bytes(gas_fee_cap_bytes, 10);
+    if let Some(v) = op_gas_fee_cap {
+        big_gas_fee_cap = v;
     } else {
         return  std::ptr::null_mut();
+    }
+
+    // 将GasPremium转为BigInt
+    let mut big_gas_premium = BigInt::default();
+    let op_gas_premium = BigInt::parse_bytes(gas_premium_bytes, 10);
+    if let Some(v) = op_gas_premium {
+        big_gas_premium = v;
+    } else {
+        return std::ptr::null_mut();
     }
 
     // 构造交易
@@ -186,13 +210,17 @@ pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
         from: from_str,
         nonce,
         value: big_val,
-        gas_price: big_gas_price,
+        gas_fee_cap: big_gas_fee_cap,
+        gas_premium: big_gas_premium,
         gas_limit,
         method,
         params: Vec::from(params_bytes),
     };
+
     // 序列化
     let mut serialized_data = tx.serialize();
+
+    //println!("serialized = {:?}", serialized_data);
 
     let v1 = V1Builder {
         codec: DAG_CBOR,
@@ -219,22 +247,81 @@ pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
         cid_bytes[i] = cid_with_prefix[i];
     }
 
-    let mut raw_signature: [u8; SIGNATURE_BYTES] = [0; SIGNATURE_BYTES];
+    match typ {
+        1 => {
+            let secp = Secp256k1::new();
+            let res = SecpPrivateKey::from_slice(&secp, private_key_slice);
+            if res.is_err() {
+                return std::ptr::null_mut();
+            }
+            let sk = res.unwrap();
 
-    // println!("cid.bytes = {:?}", cid);
+            // 计算cid哈希
+            let cid_hash = Params::new()
+                .hash_length(SECP_HASH_BYTES)
+                .to_state()
+                .update( cid.as_ref())
+                .finalize();
 
-    // 签名cid
-    PrivateKey::sign(&private_key, cid)
-        .write_bytes(&mut raw_signature.as_mut())
-        .expect("preallocated");
+            let msg_res = Message::from_slice(cid_hash.as_ref());
+            if msg_res.is_err() {
+                return std::ptr::null_mut();
+            }
+            let msg = msg_res.unwrap();
 
+            let mut raw_secp_sig = [0; SECP_SIGNATURE_BYTES+1];
 
-    let response = types::fil_SignedMessageResult{
-        cid: cid_bytes,
-        sig: raw_signature,
-    };
+            // 签名 - RFC6979
+            let sig_res = secp.sign_recoverable(&msg, &sk);
+            if sig_res.is_err() {
+                return std::ptr::null_mut();
+            }
+            let sig = sig_res.unwrap();
 
-    Box::into_raw(Box::new(response))
+            // recovery id and signature
+            let (id, bytes) = sig.serialize_compact(&secp);
+
+            // 前64字节为签名数据，最后一位为recovery id
+            for i in 0..SECP_SIGNATURE_BYTES {
+                raw_secp_sig[i] = bytes[i];
+            }
+            raw_secp_sig[SECP_SIGNATURE_BYTES] = id.to_i32() as u8;
+
+            let response = types::fil_SignedMessageResult{
+                cid: cid_bytes,
+                secp_sig: raw_secp_sig,
+                bls_sig: [0u8;96],
+            };
+
+            Box::into_raw(Box::new(response))
+        }
+
+        3 => {
+            let private_key = try_ffi!(
+                PrivateKey::from_bytes(private_key_slice),
+                std::ptr::null_mut()
+            );
+
+            let mut raw_bls_sig: [u8; SIGNATURE_BYTES] = [0; SIGNATURE_BYTES];
+
+            // 签名cid
+            PrivateKey::sign(&private_key, cid)
+                .write_bytes(&mut raw_bls_sig.as_mut())
+                .expect("preallocated");
+
+            let response = types::fil_SignedMessageResult{
+                cid: cid_bytes,
+                secp_sig: [0u8;65],
+                bls_sig: raw_bls_sig,
+            };
+
+            Box::into_raw(Box::new(response))
+        }
+
+        _ => {
+            return std::ptr::null_mut();
+        }
+    }
 }
 
 /// 功  能: 序列化地址
@@ -248,22 +335,23 @@ pub unsafe extern "C" fn sign_transaction_message(raw_private_key: *const u8,
 fn marshal_cbor_address(buf: &mut Vec<u8>, addr: &str) {
     // 获取地址类型
     let addr_type: u8 = addr.as_bytes()[1] - 48;
+
     // 从地址的第3个字符开始，解码地址，获得公钥和checksum
     let bytes: &str = addr[2..].as_ref();
     let decoded = fil_base32_decode(bytes);
     let pub_key_checksum = decoded.as_slice();
 
     // 地址类型和公钥
-    let mut addr_type_pub_key = [0u8;PUBLIC_KEY_BYTES+1];
-    addr_type_pub_key[0] = addr_type;
-    for i in 0..PUBLIC_KEY_BYTES {
-        addr_type_pub_key[i+1] = pub_key_checksum[i];
+    let mut addr_type_pub_key:Vec<u8> = Vec::new();
+    addr_type_pub_key.push(addr_type);
+    for i in 0..(pub_key_checksum.len()-4) {
+        addr_type_pub_key.push(pub_key_checksum[i]);
     }
 
-    // 写入地址长度
+    // 地址长度
     write_major_type_header(buf, MAJ_BYTE_STRING, addr_type_pub_key.len() as u64);
 
-    // 写入地址
+    // 地址
     for i in 0..addr_type_pub_key.len() {
         buf.push(addr_type_pub_key[i]);
     }
