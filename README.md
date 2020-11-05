@@ -1,5 +1,5 @@
-# 麦田云钱包SDK  
-麦田云钱包sdk基于filecoin-ffi的rust版本，增加了一些新特性。
+# FIL钱包SDK  
+FIL钱包sdk基于filecoin-ffi的rust版本，增加了一些新特性。
 
 ## 新特性
 * 生成助记词/助记词恢复私钥。 
