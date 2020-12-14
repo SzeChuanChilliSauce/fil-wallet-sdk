@@ -21,8 +21,8 @@ FIL钱包sdk基于filecoin-ffi的rust版本，增加了一些新特性。
 * 7b2254797065223a22626c73222c22507269766174654b6579223a22327353385374414c42776e544a313034556846667a45644443574f346c542b50397677697a6156726241413d227d    
 
 ## 连接节点
-* epik net connect /ip4/xxx/tcp/1347/p2p/12D3KooWDQ1dhTwPL2zyvK38QrCndjz9GQstSzWf5n9Rt1GKyPh1
-* epik net connect /ip4/xxx/tcp/1347/p2p/12D3KooWKQYdeAVKu3pUrqayeqCq1p9FwrYTriJRT7S2cykFrdsV
-* epik net connect /ip4/xxx/tcp/1347/p2p/12D3KooWGtkXNDgor18gSyf63ciQJA4ZjRxXgjcgyRY1N2W3RSNS
+* /ip4/xxx/tcp/1347/p2p/12D3KooWDQ1dhTwPL2zyvK38QrCndjz9GQstSzWf5n9Rt1GKyPh1
+* /ip4/xxx/tcp/1347/p2p/12D3KooWKQYdeAVKu3pUrqayeqCq1p9FwrYTriJRT7S2cykFrdsV
+* /ip4/xxx/tcp/1347/p2p/12D3KooWGtkXNDgor18gSyf63ciQJA4ZjRxXgjcgyRY1N2W3RSNS
 
 
